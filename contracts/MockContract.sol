@@ -326,6 +326,12 @@ contract MockContract is MockInterface {
     	assembly { mstore(add(b, 32), x) }
 	}
 
+	function recordInvocation(bytes32 methodIdKey, bytes32 calldataKey) external {
+		invocations += 1;
+		methodIdInvocations[methodIdKey] += 1;
+		calldataInvocations[calldataKey] += 1;
+	}
+
 	function() payable external {
 		bytes4 methodId;
 		assembly {
@@ -363,10 +369,13 @@ contract MockContract is MockInterface {
 			result = fallbackExpectation;
 		}
 
-		// Record invocation
-		invocations += 1;
-		methodIdInvocations[keccak256(abi.encodePacked(resetCount, methodId))] += 1;
-		calldataInvocations[keccak256(abi.encodePacked(resetCount, msg.data))] += 1;
+		// Record invocation by calling recordInvocation externally, to
+		// avoid being reverted if state modification is disallowed due to STATICCALL.
+		bytes32 methodIdKey = keccak256(abi.encodePacked(resetCount, methodId));
+		bytes32 calldataKey = keccak256(abi.encodePacked(resetCount, msg.data));
+		address(this).call(
+		  abi.encodeWithSignature("recordInvocation(bytes32,bytes32)", methodIdKey, calldataKey)
+		);
 
 		assembly {
 			return(add(0x20, result), mload(result))
